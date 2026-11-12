@@ -6,7 +6,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import Complaint, ComplaintHistory, Employee
+from app.models import Complaint, ComplaintHistory, Employee, Notification
 from app.schemas import ComplaintCreate
 
 TICKET_PREFIX = "IT"
@@ -41,8 +41,10 @@ def create_complaint(db: Session, employee: Employee, payload: ComplaintCreate) 
             subject=payload.subject.strip(),
             description=payload.description.strip(),
             category=payload.category,
+            subcategory=payload.subcategory,
             priority=payload.priority,
             status="Pending",
+            office_location=payload.office_location or employee.office_location,
             asset_tag=payload.asset_tag,
             contact_extension=payload.contact_extension,
             attachment_name=payload.attachment_name,
@@ -98,7 +100,11 @@ def list_complaints(
 def get_complaint(db: Session, ticket_id: str, employee: Optional[Employee] = None):
     stmt = (
         select(Complaint)
-        .options(selectinload(Complaint.history), selectinload(Complaint.employee))
+        .options(
+            selectinload(Complaint.history),
+            selectinload(Complaint.comments),
+            selectinload(Complaint.employee),
+        )
         .where(Complaint.ticket_id == ticket_id.strip().upper())
     )
     if employee is not None:
@@ -118,6 +124,15 @@ def assign_engineer(db: Session, complaint: Complaint, engineer: str, remarks, u
             new_status=complaint.status,
             remarks=remarks or f"Assigned to {engineer}.",
             updated_by=updated_by,
+        )
+    )
+    db.add(
+        Notification(
+            employee_id=complaint.employee_id,
+            title=f"{complaint.ticket_id} assigned to an engineer",
+            body=f"{engineer} is now handling '{complaint.subject}'.",
+            kind="Assignment",
+            ticket_id=complaint.ticket_id,
         )
     )
     db.commit()
@@ -143,6 +158,15 @@ def update_status(
             new_status=new_status,
             remarks=remarks or resolution_remarks or f"Status changed to {new_status}.",
             updated_by=updated_by,
+        )
+    )
+    db.add(
+        Notification(
+            employee_id=complaint.employee_id,
+            title=f"{complaint.ticket_id} is now {new_status}",
+            body=resolution_remarks or remarks or f"'{complaint.subject}' moved to {new_status}.",
+            kind="Resolution" if new_status == "Resolved" else "Status",
+            ticket_id=complaint.ticket_id,
         )
     )
     db.commit()

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_employee
 from app.database import get_db
-from app.models import Complaint, Employee
+from app.models import Complaint, ComplaintComment, Employee, Notification
 from app.schemas import (
     AssignRequest,
     ComplaintCreate,
@@ -14,7 +14,14 @@ from app.schemas import (
     ComplaintTrack,
     StatusUpdateRequest,
 )
-from app.services import assign_engineer, create_complaint, get_complaint, list_complaints, update_status
+from app.schemas.extras import CommentCreate, CommentOut
+from app.services import (
+    assign_engineer,
+    create_complaint,
+    get_complaint,
+    list_complaints,
+    update_status,
+)
 
 router = APIRouter(prefix="/api/complaints", tags=["Complaints"])
 
@@ -129,3 +136,52 @@ def change_status(
         db, complaint, payload.status, payload.remarks, payload.resolution_remarks, admin.full_name
     )
     return _to_detail(get_complaint(db, ticket_id))
+
+
+@router.get("/{ticket_id}/comments", response_model=List[CommentOut])
+def list_comments(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
+    complaint = get_complaint(db, ticket_id, None if employee.role == "admin" else employee)
+    if not complaint:
+        raise HTTPException(status_code=404, detail=f"Complaint {ticket_id.upper()} was not found.")
+    return complaint.comments
+
+
+@router.post("/{ticket_id}/comments", response_model=CommentOut, status_code=status.HTTP_201_CREATED)
+def add_comment(
+    ticket_id: str,
+    payload: CommentCreate,
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
+    """Employees may comment on their own tickets; the IT Cell on any ticket."""
+    complaint = get_complaint(db, ticket_id, None if employee.role == "admin" else employee)
+    if not complaint:
+        raise HTTPException(status_code=404, detail=f"Complaint {ticket_id.upper()} was not found.")
+
+    comment = ComplaintComment(
+        complaint_id=complaint.id,
+        author_name=employee.full_name,
+        author_role=employee.role,
+        message=payload.message.strip(),
+    )
+    db.add(comment)
+
+    # Tell the ticket owner when the IT Cell replies.
+    if employee.role == "admin" and complaint.employee_id != employee.id:
+        db.add(
+            Notification(
+                employee_id=complaint.employee_id,
+                title=f"New reply on {complaint.ticket_id}",
+                body=payload.message.strip()[:180],
+                kind="Status",
+                ticket_id=complaint.ticket_id,
+            )
+        )
+
+    db.commit()
+    db.refresh(comment)
+    return comment

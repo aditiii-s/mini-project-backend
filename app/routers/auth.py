@@ -5,6 +5,7 @@ from app.auth import create_access_token, get_current_employee, hash_password, v
 from app.database import get_db
 from app.models import Employee
 from app.schemas import EmployeeOut, LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.extras import PasswordChange, ProfileUpdate
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -63,3 +64,49 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 @router.get("/me", response_model=EmployeeOut)
 def me(employee: Employee = Depends(get_current_employee)):
     return employee
+
+
+@router.put("/me", response_model=EmployeeOut)
+def update_profile(
+    payload: ProfileUpdate,
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
+    """Employees may correct their own contact details, nothing else."""
+    clash = (
+        db.query(Employee)
+        .filter(Employee.email == payload.email, Employee.id != employee.id)
+        .first()
+    )
+    if clash:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another account already uses this email address.",
+        )
+    employee.email = payload.email
+    employee.phone = (payload.phone or "").strip() or None
+    if payload.office_location:
+        employee.office_location = payload.office_location.strip()
+    db.commit()
+    db.refresh(employee)
+    return employee
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: PasswordChange,
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
+    if not verify_password(payload.current_password, employee.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Your current password is incorrect."
+        )
+    if payload.current_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The new password must be different from the current one.",
+        )
+    employee.password_hash = hash_password(payload.new_password)
+    db.commit()
+    return {"detail": "Password updated. Use it the next time you sign in."}

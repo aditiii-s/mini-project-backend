@@ -5,8 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.routers import auth, complaints, dashboard
+from app.routers import auth, complaints, dashboard, extras
 from app.services.seed import seed_data
+from app.services.seed_extras import seed_extras
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bsphcl")
@@ -31,6 +32,10 @@ app.add_middleware(CORSMiddleware, **cors_kwargs)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(complaints.router)
+app.include_router(extras.service_router)
+app.include_router(extras.announcement_router)
+app.include_router(extras.notification_router)
+app.include_router(extras.kb_router)
 
 
 @app.on_event("startup")
@@ -38,6 +43,7 @@ def on_startup() -> None:
     if settings.RUN_DB_INIT:
         init_db()
         seed_data()
+        seed_extras()
         logger.info("Connected to Supabase PostgreSQL at %s", settings.safe_display_url)
     else:
         # Serverless deployment: the schema already exists, so skip the DDL and

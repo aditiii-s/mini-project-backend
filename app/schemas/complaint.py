@@ -3,6 +3,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.extras import CommentOut
+
 Category = Literal["Hardware", "Software", "Network", "Printer", "Other"]
 Priority = Literal["Low", "Medium", "High", "Critical"]
 Status = Literal["Pending", "Assigned", "In Progress", "Resolved"]
@@ -12,7 +14,9 @@ class ComplaintCreate(BaseModel):
     subject: str = Field(min_length=5, max_length=200)
     description: str = Field(min_length=10, max_length=1500)
     category: Category
+    subcategory: Optional[str] = Field(default=None, max_length=80)
     priority: Priority = "Medium"
+    office_location: Optional[str] = Field(default=None, max_length=120)
     asset_tag: Optional[str] = Field(default=None, max_length=60)
     contact_extension: Optional[str] = Field(default=None, max_length=30)
     attachment_name: Optional[str] = Field(default=None, max_length=255)
@@ -44,6 +48,8 @@ class ComplaintHistoryOut(BaseModel):
 
 class ComplaintDetail(ComplaintOut):
     description: str
+    subcategory: Optional[str] = None
+    office_location: Optional[str] = None
     asset_tag: Optional[str] = None
     contact_extension: Optional[str] = None
     attachment_name: Optional[str] = None
@@ -55,6 +61,7 @@ class ComplaintDetail(ComplaintOut):
     department: Optional[str] = None
     office_location: Optional[str] = None
     history: List[ComplaintHistoryOut] = []
+    comments: List["CommentOut"] = []
 
 
 class ComplaintTrack(BaseModel):

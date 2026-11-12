@@ -10,6 +10,14 @@ CATEGORIES = ("Hardware", "Software", "Network", "Printer", "Other")
 PRIORITIES = ("Low", "Medium", "High", "Critical")
 STATUSES = ("Pending", "Assigned", "In Progress", "Resolved")
 
+SUBCATEGORIES = {
+    "Hardware": ["Desktop / PC", "Monitor", "UPS / Power", "Keyboard / Mouse", "Other hardware"],
+    "Software": ["Billing application", "Operating system", "Licence / activation", "MS Office", "Other software"],
+    "Network": ["LAN / cable", "Wi-Fi", "VPN", "Internet speed", "Other network"],
+    "Printer": ["Paper jam", "Toner / cartridge", "Scanner", "Print quality", "Other printer"],
+    "Other": ["Email ID", "Access / permission", "New request", "Other"],
+}
+
 
 class Complaint(Base):
     __tablename__ = "complaints"
@@ -28,6 +36,8 @@ class Complaint(Base):
     status: Mapped[str] = mapped_column(
         Enum(*STATUSES, name="complaint_status"), nullable=False, default="Pending", index=True
     )
+    subcategory: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    office_location: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     asset_tag: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     contact_extension: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
     attachment_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
@@ -40,6 +50,12 @@ class Complaint(Base):
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     employee = relationship("Employee", back_populates="complaints")
+    comments = relationship(
+        "ComplaintComment",
+        back_populates="complaint",
+        cascade="all, delete-orphan",
+        order_by="ComplaintComment.created_at",
+    )
     history = relationship(
         "ComplaintHistory",
         back_populates="complaint",
