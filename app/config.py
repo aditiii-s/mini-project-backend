@@ -26,9 +26,22 @@ class Settings:
     DB_USER: str = os.getenv("SUPABASE_DB_USER", "postgres").strip()
     DB_PASSWORD: str = os.getenv("SUPABASE_DB_PASSWORD", "")
 
+    # On serverless hosts (Vercel) every cold start would otherwise re-run the
+    # CREATE TABLE / seed pass, which is slow and pointless once the schema exists.
+    # Set RUN_DB_INIT=false there and create the schema once from your machine.
+    RUN_DB_INIT: bool = os.getenv("RUN_DB_INIT", "true").strip().lower() not in (
+        "false",
+        "0",
+        "no",
+    )
+
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-change-me")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "720"))
+
+    # Optional regex, useful on Vercel where every preview deployment gets its own
+    # hostname, e.g. https://.*-aditi-bbbc\.vercel\.app
+    CORS_ORIGIN_REGEX: str = os.getenv("CORS_ORIGIN_REGEX", "").strip()
 
     CORS_ORIGINS: list = [
         o.strip()

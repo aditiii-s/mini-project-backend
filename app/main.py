@@ -17,13 +17,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+cors_kwargs = {
+    "allow_origins": settings.CORS_ORIGINS,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+if settings.CORS_ORIGIN_REGEX:
+    cors_kwargs["allow_origin_regex"] = settings.CORS_ORIGIN_REGEX
+
+app.add_middleware(CORSMiddleware, **cors_kwargs)
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -32,9 +35,17 @@ app.include_router(complaints.router)
 
 @app.on_event("startup")
 def on_startup() -> None:
-    init_db()
-    seed_data()
-    logger.info("Connected to Supabase PostgreSQL at %s", settings.safe_display_url)
+    if settings.RUN_DB_INIT:
+        init_db()
+        seed_data()
+        logger.info("Connected to Supabase PostgreSQL at %s", settings.safe_display_url)
+    else:
+        # Serverless deployment: the schema already exists, so skip the DDL and
+        # seed pass that would otherwise run on every cold start.
+        logger.info(
+            "RUN_DB_INIT is off - skipping schema setup. Using %s",
+            settings.safe_display_url,
+        )
 
 
 @app.get("/", tags=["Health"])
